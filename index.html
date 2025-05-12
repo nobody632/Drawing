@@ -15,16 +15,13 @@
             padding: 20px;
             background-color: #f4f4f4;
         }
-
         #canvas {
             border: 2px solid black;
             cursor: crosshair;
         }
-
         .color-picker, .controls {
             margin: 10px 0;
         }
-
         .color-picker button, .controls button {
             width: 30px;
             height: 30px;
@@ -33,7 +30,6 @@
             cursor: pointer;
             outline: none;
         }
-
         .controls button {
             width: auto;
             padding: 5px 10px;
@@ -51,8 +47,14 @@
     </div>
     <div class="controls">
         <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
         <button id="erase">Erase</button>
         <button id="restart">Restart</button>
+        <button id="line">Line</button>
+        <button id="curve">Curve</button>
+        <button id="elbow">Elbow</button>
+        <button id="rectangle">Rectangle</button>
+        <button id="circle">Circle</button>
     </div>
     <canvas id="canvas" width="800" height="500"></canvas>
 
@@ -63,31 +65,41 @@
         let currentColor = 'black';
         let paths = [];
         let currentPath = [];
+        let redoStack = [];
+        let mode = 'free'; // Modes: free, line, curve, elbow, rectangle, circle
+        let startPoint = null;
 
         // Start drawing
         function startPosition(e) {
             painting = true;
             currentPath = [];
-            draw(e);
+            startPoint = { x: e.clientX - canvas.offsetLeft, y: e.clientY - canvas.offsetTop };
+            if (mode === 'free') draw(e);
         }
 
         // Stop drawing
-        function endPosition() {
+        function endPosition(e) {
             painting = false;
+            if (mode !== 'free' && startPoint) {
+                const endPoint = { x: e.clientX - canvas.offsetLeft, y: e.clientY - canvas.offsetTop };
+                drawShape(startPoint, endPoint);
+            }
             paths.push([...currentPath]);
+            redoStack = []; // Clear redo stack after new action
             ctx.beginPath();
+            startPoint = null;
         }
 
-        // Draw
+        // Draw freehand
         function draw(e) {
-            if (!painting) return;
+            if (!painting || mode !== 'free') return;
+
+            const x = e.clientX - canvas.offsetLeft;
+            const y = e.clientY - canvas.offsetTop;
 
             ctx.lineWidth = 5;
             ctx.lineCap = 'round';
             ctx.strokeStyle = currentColor;
-
-            const x = e.clientX - canvas.offsetLeft;
-            const y = e.clientY - canvas.offsetTop;
 
             ctx.lineTo(x, y);
             ctx.stroke();
@@ -97,32 +109,32 @@
             currentPath.push({ x, y, color: currentColor });
         }
 
-        // Change color
-        function changeColor(e) {
-            currentColor = e.target.getAttribute('data-color');
+        // Draw shapes (line, rectangle, circle, etc.)
+        function drawShape(start, end) {
+            ctx.beginPath();
+            ctx.strokeStyle = currentColor;
+
+            if (mode === 'line') {
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
+            } else if (mode === 'rectangle') {
+                ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
+            } else if (mode === 'circle') {
+                const radius = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
+                ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
+            } else if (mode === 'elbow') {
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(start.x, end.y);
+                ctx.lineTo(end.x, end.y);
+            }
+            ctx.stroke();
+
+            currentPath.push({ start, end, color: currentColor, mode });
         }
 
-        // Undo last action
-        function undo() {
-            paths.pop();
-            redraw();
-        }
-
-        // Erase mode
-        function erase() {
-            currentColor = '#f4f4f4'; // Matches the background color
-        }
-
-        // Restart canvas
-        function restart() {
-            paths = [];
-            redraw();
-        }
-
-        // Redraw the canvas
+        // Redraw canvas
         function redraw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.beginPath();
             paths.forEach(path => {
                 ctx.beginPath();
                 path.forEach((point, index) => {
@@ -138,19 +150,62 @@
             });
         }
 
+        // Undo last action
+        function undo() {
+            if (paths.length > 0) {
+                redoStack.push(paths.pop());
+                redraw();
+            }
+        }
+
+        // Redo last undone action
+        function redo() {
+            if (redoStack.length > 0) {
+                paths.push(redoStack.pop());
+                redraw();
+            }
+        }
+
+        // Change drawing mode
+        function changeMode(newMode) {
+            mode = newMode;
+            startPoint = null; // Reset start point
+        }
+
+        // Erase mode
+        function erase() {
+            currentColor = '#f4f4f4'; // Matches the background color
+        }
+
+        // Restart canvas
+        function restart() {
+            paths = [];
+            redoStack = [];
+            redraw();
+        }
+
+        // Change color
+        function changeColor(e) {
+            currentColor = e.target.getAttribute('data-color');
+        }
+
         // Event listeners
         canvas.addEventListener('mousedown', startPosition);
         canvas.addEventListener('mouseup', endPosition);
         canvas.addEventListener('mousemove', draw);
 
-        // Color picker button events
-        const colorButtons = document.querySelectorAll('.color-picker button');
-        colorButtons.forEach(button => button.addEventListener('click', changeColor));
-
-        // Control buttons
         document.getElementById('undo').addEventListener('click', undo);
+        document.getElementById('redo').addEventListener('click', redo);
         document.getElementById('erase').addEventListener('click', erase);
         document.getElementById('restart').addEventListener('click', restart);
+        document.getElementById('line').addEventListener('click', () => changeMode('line'));
+        document.getElementById('curve').addEventListener('click', () => changeMode('curve'));
+        document.getElementById('elbow').addEventListener('click', () => changeMode('elbow'));
+        document.getElementById('rectangle').addEventListener('click', () => changeMode('rectangle'));
+        document.getElementById('circle').addEventListener('click', () => changeMode('circle'));
+
+        const colorButtons = document.querySelectorAll('.color-picker button');
+        colorButtons.forEach(button => button.addEventListener('click', changeColor));
     </script>
 </body>
 </html>
