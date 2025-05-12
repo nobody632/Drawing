@@ -21,17 +21,22 @@
             cursor: crosshair;
         }
 
-        .color-picker {
+        .color-picker, .controls {
             margin: 10px 0;
         }
 
-        .color-picker button {
+        .color-picker button, .controls button {
             width: 30px;
             height: 30px;
             border: none;
             margin: 0 5px;
             cursor: pointer;
             outline: none;
+        }
+
+        .controls button {
+            width: auto;
+            padding: 5px 10px;
         }
     </style>
 </head>
@@ -44,6 +49,11 @@
         <button style="background-color: green;" data-color="green"></button>
         <button style="background-color: yellow;" data-color="yellow"></button>
     </div>
+    <div class="controls">
+        <button id="undo">Undo</button>
+        <button id="erase">Erase</button>
+        <button id="restart">Restart</button>
+    </div>
     <canvas id="canvas" width="800" height="500"></canvas>
 
     <script>
@@ -51,16 +61,20 @@
         const ctx = canvas.getContext('2d');
         let painting = false;
         let currentColor = 'black';
+        let paths = [];
+        let currentPath = [];
 
         // Start drawing
         function startPosition(e) {
             painting = true;
+            currentPath = [];
             draw(e);
         }
 
         // Stop drawing
         function endPosition() {
             painting = false;
+            paths.push([...currentPath]);
             ctx.beginPath();
         }
 
@@ -72,15 +86,56 @@
             ctx.lineCap = 'round';
             ctx.strokeStyle = currentColor;
 
-            ctx.lineTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+            const x = e.clientX - canvas.offsetLeft;
+            const y = e.clientY - canvas.offsetTop;
+
+            ctx.lineTo(x, y);
             ctx.stroke();
             ctx.beginPath();
-            ctx.moveTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+            ctx.moveTo(x, y);
+
+            currentPath.push({ x, y, color: currentColor });
         }
 
         // Change color
         function changeColor(e) {
             currentColor = e.target.getAttribute('data-color');
+        }
+
+        // Undo last action
+        function undo() {
+            paths.pop();
+            redraw();
+        }
+
+        // Erase mode
+        function erase() {
+            currentColor = '#f4f4f4'; // Matches the background color
+        }
+
+        // Restart canvas
+        function restart() {
+            paths = [];
+            redraw();
+        }
+
+        // Redraw the canvas
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            paths.forEach(path => {
+                ctx.beginPath();
+                path.forEach((point, index) => {
+                    ctx.strokeStyle = point.color;
+                    if (index === 0) {
+                        ctx.moveTo(point.x, point.y);
+                    } else {
+                        ctx.lineTo(point.x, point.y);
+                        ctx.stroke();
+                    }
+                });
+                ctx.beginPath();
+            });
         }
 
         // Event listeners
@@ -91,6 +146,11 @@
         // Color picker button events
         const colorButtons = document.querySelectorAll('.color-picker button');
         colorButtons.forEach(button => button.addEventListener('click', changeColor));
+
+        // Control buttons
+        document.getElementById('undo').addEventListener('click', undo);
+        document.getElementById('erase').addEventListener('click', erase);
+        document.getElementById('restart').addEventListener('click', restart);
     </script>
 </body>
 </html>
